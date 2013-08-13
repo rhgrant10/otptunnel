@@ -45,8 +45,8 @@ class TunnelServer(object):
                     to_tap = self.decode_pkt_from_socket(to_tap)
                     print "*****new TO_TAP*****"
                     print to_tap
-                    #if addr[0] != self._raddr or addr[1] != self._rport:
-                    #    to_tap = '' # drop packet                    
+                    if addr[0] != self._raddr or addr[1] != self._rport:
+                        to_tap = '' # drop packet                    
                 if self._tap in w:
                     self._tap.write(to_tap) 
                     to_tap = ''
