@@ -15,8 +15,8 @@ class OTP(object):
         self._keypath = os.path.join(keyfile)
         self._current_encode_seek = initial_seek
         self._stepping = 2
-	self._encode_counter = 0
-	self._decode_counter = 0
+        self._encode_counter = 0
+        self._decode_counter = 0
         try:
             keypool = open(self._keypath, 'rb')
         except:
@@ -29,7 +29,7 @@ class OTP(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
-	print "Encoding Offset: ", self._current_encode_seek
+        print "Encoding Offset: ", self._current_encode_seek
         keypool = open(self._keypath, 'rb')
         keyblock = bytearray()
         for i in range(bufsize):
@@ -45,7 +45,7 @@ class OTP(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
-	print "Decoding Offset: ", seek
+        print "Decoding Offset: ", seek
         keypool = open(self._keypath, 'rb')
         keyblock = bytearray()
         for i in range(bufsize):
@@ -92,8 +92,8 @@ class OTP(object):
         for i in range(len(offset)):
             packetbytes.append(offset[i])
 
-	self._encode_counter += 1 
-	print "Encode Counter: ", self._encode_counter
+        self._encode_counter += 1 
+        print "Encode Counter: ", self._encode_counter
         return packetbytes
 
     def decode(self, ciphertext):
@@ -116,7 +116,6 @@ class OTP(object):
         for i in offsetbytes:
             counter -= 1
             offset += i * (256 ** counter)
-            print "offset: ", offset
 
         # Decipher loop.
         keypool = self.fetch_decode_block(offset, len(ciphertext))
@@ -132,9 +131,10 @@ class OTP(object):
         chksum = bytearray(hashlib.md5(str(plaintext)).digest())
         if pktchksum == chksum:
             self._decode_counter += 1
-	    print "Decoding counter: ", self._decode_counter
+            print "Decoding counter: ", self._decode_counter
             return plaintext
         else:
+            print "Dropped packet: ", str(plaintext)
             return bytearray()
 
 
