@@ -1,63 +1,196 @@
-import sys
-import optparse
+import argparse
+import textwrap
 import socket
+import pytun
+from operator import xor
+import os
+import sys
 import select
 import errno
-import pytun
-from scapy.all import *
-from operator import xor
+import hashlib
+import pynetlinux
 
-class TunnelServer(object):
+class OTP(object):
 
-    def __init__(self, taddr, tmask, tmtu, laddr, lport, raddr, rport):
-        self._tap = pytun.TunTapDevice(flags=pytun.IFF_TAP|pytun.IFF_NO_PI)
-        self._tap.addr = taddr
-        self._tap.netmask = tmask
-        self._tap.mtu = tmtu
+    def __init__(self, keyfile, initial_seek):
+        self._keypath = os.path.join(keyfile)
+        self._current_encode_seek = initial_seek
+        self._stepping = 2
+        try:
+            keypool = open(self._keypath, 'rb')
+        except:
+            sys.exit('Invalid keyfile specified')
+        keypool.close()
+
+    def fetch_encode_block(self, bufsize):
+        """
+        Takes the size of the encoding block to be returned
+        and fetches a block of key using self's stepping value to step 
+        through the bytes of the keyfile.
+        """
+        keypool = open(self._keypath, 'rb')
+        keyblock = bytearray()
+        for i in range(bufsize):
+            keypool.seek(self._current_encode_seek)
+            keyblock.append(keypool.read(1))
+            self._current_encode_seek += self._stepping
+        keypool.close()
+        return keyblock
+
+    def fetch_decode_block(self, seek, bufsize):
+        """
+        Takes the size of the encoding block to be returned
+        and fetches a block of key using self's stepping value to step 
+        through the bytes of the keyfile.
+        """
+        keypool = open(self._keypath, 'rb')
+        keyblock = bytearray()
+        for i in range(bufsize):
+            keypool.seek(self.seek)
+            keyblock.append(keypool.read(1))
+            seek += self._stepping
+        keypool.close()
+        return keyblock
+
+    def encode(self, plaintext):
+        """
+        Takes plaintext as bytearray. Generates a 16 byte md5 hash of the 
+        entire packet and appends it to the plaintext. Plaintext is xor'ed
+        with bytes pulled from keyfile.
+        """
+        # Here we take a hash of the bytestring that was the original packet.
+        hashish = bytearray(hashlib.md5(str(plaintext)).digest())
+
+        # We append the bytes that represent the hash of the packet to the end
+        # of the packet
+        for i in hashish:
+            plaintext.append(i)
+
+        # Initialize the ciphertext to be an empty bytearray to be appended to
+        # in our cipherloop. Make a note of the current seek in the file, it
+        # will be appended to the packet after the cipherloop.
+        ciphertext = bytearray()
+        offset = bytearray.fromhex(
+            "{0:012x}".format(self._current_encode_seek))
+
+        # Cipher loop. Iterate over the bytes in plaintext and xor with the
+        # keybytes from the global offset.
+        keypool = self.fetch_encode_block(len(plaintext))
+
+        for i in range(len(plaintext)):
+            ciphertext.append(xor(plaintext[i], keypool[i]))
+
+        # After the original packet plus the md5 hashish are XOR'ed with the
+        # keybytes, the offset within the keyfile is appended as a 6-byte hex
+        # number to the packet bytes to be returned. This allows for a ~256TB
+        # maximum keyfile size.
+        packetbytes = ciphertext
+        for i in range(len(offset)):
+            packetbytes.append(offset[i])
+
+        return packetbytes
+
+    def decode(self, ciphertext):
+        """
+        Takes ciphertext as bytearray. Pops last 6 bytes off the packet.
+        Interprets that as an integer (from hex bytes) and uses that
+        as the starting offset. Step by 2 to decode rest of payload including
+        16 byte md5 checksum of packet. Pop off next 16 bytes and validate 
+        rest of packet. Return plaintext packet if checksum is good.
+        """
+        # 'Pop' last 6 bytes of ciphertext and interpret as integer offset.
+        offsetbytes = ciphertext[-6:]
+        ciphertext = ciphertext[:-6]
+        counter = 6
+        offset = 0
+        for i in offsetbytes:
+            counter -= 1
+            offset += i * (256 ** counter)
+
+        # Decipher loop.
+        keypool = self.fetch_decode_block(offset, len(ciphertext))
+        plaintext = bytearray()
+        for i in range(len(ciphertext)):
+            plaintext.append(xor(ciphertext[i], keypool[i]))
+
+        # Remove and store last 16 bytes from plaintext and md5sum the
+        # remaining bytes. If the checksum matches the 16 bytes that
+        # were 'popped' off, return the plaintext.
+        pktchksum = plaintext[-16:]
+        plaintext = plaintext[:-16]
+        chksum = bytearray(hashlib.md5(str(plaintext)).digest())
+        if pktchksum == chksum:
+            return plaintext
+        else:
+            return bytearray()
+
+
+class OTPTunnel(object):
+
+    '''
+    OTPTunnel initializes a TAP interface and instanciates an OTP object which
+    is used to encode and decode packets throughout the main_loop.
+    '''
+
+    def __init__(self, taddr, tmask, tmtu, laddr, lport, remote_address,
+                 remote_port, keyfile, server):
+        self._tap = pynetlinux.tap.Tap()
+        self._tap.set_ip(taddr)
+        self._tap.set_netmask(int(tmask))
+        self._tmtu = tmtu
         self._tap.up()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.bind((laddr, lport))
-        self._raddr = raddr
-        self._rport = rport
-
-        with open('rand','r') as f:
-            self._keypool = bytearray(f.read())
-
-        self._global_key_offset = 0
+        self._remote_address = remote_address
+        self._remote_port = remote_port
+        if server == False:
+            self._key = OTP(keyfile, 0)
+        else:
+            self._key = OTP(keyfile, 1)
 
     def run(self):
-        mtu = self._tap.mtu
-        r = [self._tap, self._sock]; w = []; x = []
+        mtu = self._tmtu
+        r = [self._tap, self._sock]
+        w = []
+        x = []
         to_tap = ''
         to_sock = ''
         while True:
             try:
                 r, w, x = select.select(r, w, x)
                 if self._tap in r:
+                    # Read packet generated by client on the TAP.
                     to_sock = self._tap.read(mtu)
-                    print "*****read to_sock*****"
-                    print to_sock
 
                 if self._sock in r:
+                    # Read packet from socket. addr[0] is the remote ip
+                    # and addr[1] is the remote port.
                     to_tap, addr = self._sock.recvfrom(65535)
-                    print "*****old TO_TAP*****"
-                    print to_tap
-                    to_tap = self.decode_pkt_from_socket(to_tap)
-                    print "*****new TO_TAP*****"
-                    print to_tap
-                    if addr[0] != self._raddr or addr[1] != self._rport:
-                        to_tap = '' # drop packet                    
+
+                    # Decode incoming packet. Reassign to to_tap.
+                    to_tap = self._key.decode(to_tap)
+
+                    # Drop packets found on the socket if they are not from
+                    # the server that we inteded to communicate with
+                    if addr[0] != self._remote_address or addr[1] != self._remote_port:
+                        to_tap = ''  # drop packet
                 if self._tap in w:
-                    self._tap.write(to_tap) 
+                    # Begin write section of main loop. Only control packets and
+                    # encoded packets received from socket should be processed
+                    # here.
+                    self._tap.write(to_tap)
                     to_tap = ''
                 if self._sock in w:
-                    # Encode entire 'to_sock' packet
-                    to_sock = self.encode_pkt_from_tap(to_sock)
-                    print "*****new to_sock*****"
-                    print to_sock
-                    self._sock.sendto(to_sock, (self._raddr, self._rport))
+                    # Packets read in from the TAP are encoded and written
+                    # to the socket as bytes. The socket.sendto() function
+                    # encapsulates the encoded payload with the appropriate
+                    # Ethernet/IP/UDP headers.
+                    to_sock = self._key.encode(bytearray(to_sock))
+                    self._sock.sendto(
+                        to_sock, (self._remote_address, self._remote_port))
                     to_sock = ''
-                r = []; w = []
+                r = []
+                w = []
                 if to_tap:
                     w.append(self._tap)
                 else:
@@ -66,78 +199,88 @@ class TunnelServer(object):
                     w.append(self._sock)
                 else:
                     r.append(self._tap)
-            except (select.error, socket.error, pytun.Error), e:
+            except (select.error, socket.error) as e:
                 if e[0] == errno.EINTR:
                     continue
                 print >> sys.stderr, str(e)
                 break
 
-    def encode_pkt_from_tap(self, pkt):
-        self._global_key_offset = 0
-        ether_pkt = Ether(pkt)
-
-        print "*" * 40
-        print "  Encoding packet received from TAP"
-        print "*" * 40
-        ether_pkt.display()
-        print ""
-
-        plaintext = bytearray(ether_pkt.original)
-        ciphertext = bytearray()
-        for i in plaintext:
-            ciphertext.append(xor(i, self._keypool[self._global_key_offset]))
-            self._global_key_offset += 1
-        return str(ciphertext)
-
-    def decode_pkt_from_socket(self, pkt):
-        self._global_key_offset = 0
-        ether_pkt = Ether(pkt)
-
-        print "-" * 40
-        print "  Decoding packet received from Socket"
-        print "-" * 40
-        ether_pkt.display()
-        print ""
-        
-        plaintext = bytearray(ether_pkt.original)
-        ciphertext = bytearray()
-        for i in plaintext:
-            ciphertext.append(xor(i, self._keypool[self._global_key_offset]))
-            self._global_key_offset += 1
-        return str(ciphertext)
-        
-
-
 
 def main():
-    parser = optparse.OptionParser()
-    parser.add_option('--tap-addr', dest='taddr',
-            help='set tunnel local address')
-    parser.add_option('--tap-netmask', default='255.255.255.0',dest='tmask',
-            help='set tunnel netmask')
-    parser.add_option('--tap-mtu', type='int', default=1500,dest='tmtu',
-            help='set tunnel MTU')
-    parser.add_option('--local-addr', default='0.0.0.0', dest='laddr',
-            help='set local address [%default]')
-    parser.add_option('--local-port', type='int', default=12000, dest='lport',
-            help='set local port [%default]')
-    parser.add_option('--remote-addr', dest='raddr',
-            help='set remote address')
-    parser.add_option('--remote-port', type='int', dest='rport',
-            help='set remote port')
-    opt, args = parser.parse_args()
-    if not (opt.taddr and opt.raddr and opt.rport):
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent('''\
+        A VPN-like server/client that utilizes a user specified
+        one time pad for the XOR'ing of network traffic over a TAP interface.
+        '''),
+        epilog=textwrap.dedent('''\
+        
+        Examples:
+        
+        To start a server listening on default settings,
+
+        otptunnel -S -K ~/random.bin  
+        
+        If that server's IP is 192.168.1.1, and you have the same keyfile
+        in your home directory, you can connect to it using,  
+
+        otptunnel -K ~/random.bin -A 192.168.1.1 --tap-addr 10.8.0.2
+
+        '''))
+    parser.add_argument('-S', '--server', action="store_true", dest='server',
+                        help="set server mode (default: client mode)")
+    parser.add_argument('-K', dest='keyfile', help='file to be used as key')
+    parser.add_argument('-A', dest='remote_address',
+                        help='set remote server address')
+    parser.add_argument('-P', type=int, dest='remote_port', default='12000',
+                        help='set remote server port')
+    parser.add_argument(
+        '--tap-addr', type=str, dest='taddr', default='10.8.0.1',
+        help='set tunnel local address (default: 10.8.0.1)')
+    parser.add_argument('--tap-netmask', default='255.255.255.0', dest='tmask',
+                        help='set tunnel netmask (default: 255.255.255.0)')
+    parser.add_argument('--tap-mtu', type=int, default=32768, dest='tmtu',
+                        help='set tunnel MTU (default: 32768)')
+    parser.add_argument('--local-addr', default='0.0.0.0', dest='laddr',
+        help='address to which OTPTunnel will bind (default: 0.0.0.0)')
+    parser.add_argument('--local-port', type=int, default=12000, dest='lport',
+                        help='set local port (default: 12000)')
+    args = parser.parse_args()
+    # User must always specify keyfile.
+    if not args.keyfile:
         parser.print_help()
+        print "[ERROR] No keyfile specified."
         return 1
-    try:
-        server = TunnelServer(opt.taddr, opt.tmask, opt.tmtu, opt.laddr,
-                opt.lport, opt.raddr, opt.rport)
-    except (pytun.Error, socket.error), e:
-        print >> sys.stderr, str(e)
-        return 1
-    server.run()
-    return 0
+    if not args.server:
+        # User must specify TAP address when acting as a client.
+        # The server will be 10.8.0.1 by default so the client can't
+        # use the default.
+        if not ((args.taddr == '10.8.0.1') and args.remote_address):
+            parser.print_help()
+            return 1
+        try:
+            client = OTPTunnel(
+                args.taddr, args.tmask, args.tmtu, args.laddr,
+                args.lport, args.remote_address, args.remote_port,
+                args.keyfile, args.server)
+        except (socket.error) as e:
+            print >> sys.stderr, str(e)
+            return 1
+        client.run()
+        return 0
+    else:
+        # We are in server mode.
+        #try:
+        server = OTPTunnel(
+            args.taddr, args.tmask, args.tmtu, args.laddr,
+            args.lport, args.remote_address, args.remote_port,
+            args.keyfile, args.server)
+        #except (pytun.Error, socket.error) as e:
+            #print >> sys.stderr, str(e)
+            #return 1
+        server.run()
+        return 0
+
 
 if __name__ == '__main__':
     sys.exit(main())
-
