@@ -1,7 +1,6 @@
 import argparse
 import textwrap
 import socket
-import pytun
 from operator import xor
 import os
 import sys
