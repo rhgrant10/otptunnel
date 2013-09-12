@@ -260,7 +260,7 @@ def main():
         # User must specify TAP address when acting as a client.
         # The server will be 10.8.0.1 by default so the client can't
         # use the default.
-        if not ((args.taddr == '10.8.0.1') and args.remote_address):
+        if not args.remote_address:
             parser.print_help()
             return 1
         try:
