@@ -1,7 +1,6 @@
 import argparse
 import textwrap
 import socket
-import pytun
 from operator import xor
 import os
 import sys
@@ -270,14 +269,10 @@ def main():
         return 0
     else:
         # We are in server mode.
-        #try:
         server = OTPTunnel(
             args.taddr, args.tmask, args.tmtu, args.laddr,
             args.lport, args.remote_address, args.remote_port,
             args.keyfile, args.server)
-        #except (pytun.Error, socket.error) as e:
-            #print >> sys.stderr, str(e)
-            #return 1
         server.run()
         return 0
 
