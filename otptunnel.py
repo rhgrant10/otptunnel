@@ -15,6 +15,8 @@ class OTP(object):
         self._keypath = os.path.join(keyfile)
         self._current_encode_seek = initial_seek
         self._stepping = 2
+	self._encode_counter = 0
+	self._decode_counter = 0
         try:
             keypool = open(self._keypath, 'rb')
         except:
@@ -27,6 +29,7 @@ class OTP(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
+	print "Encoding Offset: ", self._current_encode_seek
         keypool = open(self._keypath, 'rb')
         keyblock = bytearray()
         for i in range(bufsize):
@@ -42,6 +45,7 @@ class OTP(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
+	print "Decoding Offset: ", seek
         keypool = open(self._keypath, 'rb')
         keyblock = bytearray()
         for i in range(bufsize):
@@ -88,6 +92,8 @@ class OTP(object):
         for i in range(len(offset)):
             packetbytes.append(offset[i])
 
+	self._encode_counter += 1 
+	print "Encode Counter: ", self._encode_counter
         return packetbytes
 
     def decode(self, ciphertext):
@@ -125,6 +131,8 @@ class OTP(object):
         plaintext = plaintext[:-16]
         chksum = bytearray(hashlib.md5(str(plaintext)).digest())
         if pktchksum == chksum:
+            self._decode_counter += 1
+	    print "Decoding counter: ", self._decode_counter
             return plaintext
         else:
             return bytearray()
@@ -242,8 +250,8 @@ def main():
     parser.add_argument(
         '--tap-addr', type=str, dest='taddr', default='10.8.0.1',
         help='set tunnel local address (default: 10.8.0.1)')
-    parser.add_argument('--tap-netmask', default='255.255.255.0', dest='tmask',
-                        help='set tunnel netmask (default: 255.255.255.0)')
+    parser.add_argument('--tap-netmask', default='24', dest='tmask',
+                        help='set tunnel netmask (default: 24)')
     parser.add_argument('--tap-mtu', type=int, default=32768, dest='tmtu',
                         help='set tunnel MTU (default: 32768)')
     parser.add_argument('--local-addr', default='0.0.0.0', dest='laddr',
