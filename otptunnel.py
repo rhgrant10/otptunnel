@@ -187,8 +187,8 @@ class OTPTunnel(object):
 
                     # Drop packets found on the socket if they are not from
                     # the server that we inteded to communicate with
-                    if addr[0] != self._remote_address or addr[1] != self._remote_port:
-                        to_tap = ''  # drop packet
+                    #if addr[0] != self._remote_address or addr[1] != self._remote_port:
+                    #    to_tap = ''  # drop packet
                 if self._tap in w:
                     # Begin write section of main loop. Only control packets and
                     # encoded packets received from socket should be processed
