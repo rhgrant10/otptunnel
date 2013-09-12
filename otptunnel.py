@@ -45,7 +45,7 @@ class OTP(object):
         keypool = open(self._keypath, 'rb')
         keyblock = bytearray()
         for i in range(bufsize):
-            keypool.seek(self.seek)
+            keypool.seek(seek)
             keyblock.append(keypool.read(1))
             seek += self._stepping
         keypool.close()
@@ -57,6 +57,7 @@ class OTP(object):
         entire packet and appends it to the plaintext. Plaintext is xor'ed
         with bytes pulled from keyfile.
         """
+        plaintext = bytearray(plaintext)
         # Here we take a hash of the bytestring that was the original packet.
         hashish = bytearray(hashlib.md5(str(plaintext)).digest())
 
@@ -97,14 +98,19 @@ class OTP(object):
         16 byte md5 checksum of packet. Pop off next 16 bytes and validate 
         rest of packet. Return plaintext packet if checksum is good.
         """
+        #print "ciphertext: ", ciphertext
         # 'Pop' last 6 bytes of ciphertext and interpret as integer offset.
+        ciphertext = bytearray(ciphertext)
         offsetbytes = ciphertext[-6:]
         ciphertext = ciphertext[:-6]
+        #print "ciphertext -6: ", ciphertext
         counter = 6
         offset = 0
+        #print "offsetbytes: ", offsetbytes
         for i in offsetbytes:
             counter -= 1
             offset += i * (256 ** counter)
+            print "offset: ", offset
 
         # Decipher loop.
         keypool = self.fetch_decode_block(offset, len(ciphertext))
@@ -184,7 +190,7 @@ class OTPTunnel(object):
                     # to the socket as bytes. The socket.sendto() function
                     # encapsulates the encoded payload with the appropriate
                     # Ethernet/IP/UDP headers.
-                    to_sock = self._key.encode(bytearray(to_sock))
+                    to_sock = self._key.encode(to_sock)
                     self._sock.sendto(
                         to_sock, (self._remote_address, self._remote_port))
                     to_sock = ''
