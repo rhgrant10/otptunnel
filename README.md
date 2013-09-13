@@ -31,7 +31,7 @@ The packets will be picked off the TAP at OSI layer 2 and have their 16-byte md5
 
 #Note From The Author
 
-Please feel free to modify this source to your liking and submit a pull-request! I've tried to maintain good PEP8 formatting throughout the code and comment wherever possible so that anyone can understand it. One key motivation for me in doing this project is to bring cryptography back down to an easily digestable and highly customizable system for experimenters, students and hobbyists from
+Please feel free to modify this source to your liking and submit a pull-request! I've tried to maintain good PEP8 formatting throughout the code and comment wherever possible so that anyone can understand it. One key motivation for me in doing this project is to bring cryptography back down to an easily digestable and highly customizable system for experimenters, students and hobbyists.
 
 #TODO: (as of 9/13/2013)
 
