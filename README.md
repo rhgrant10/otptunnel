@@ -31,7 +31,7 @@ The packets will be picked off the TAP at OSI layer 2 and have their 16-byte md5
 
 #Note From The Author
 
-Please feel free to modify this source to your liking and submit a pull-request! I've tried to maintain good PEP8 formatting throughout the code and comment wherever possible so that anyone can understand it. One key motivation for me in doing this project is to bring cryptography back down to an easily digestable and highly customizable system for experimenters, students and hobbyists.
+Please feel free to modify this source to your liking and submit a pull-request! I've tried to maintain good PEP8 formatting throughout the code and comment wherever possible so that anyone can understand it. One key motivation for me in doing this project is to bring cryptography back down to an easily digestable and highly customizable system for experimenters, students and hobbyists from
 
 #TODO: (as of 9/13/2013)
 
@@ -50,3 +50,4 @@ Please feel free to modify this source to your liking and submit a pull-request!
 * Introduce "control packets" as mechanism for servers and clients to exchange messages regarding establishing a new client connection to the server and for the server to hand out a TAP IP address to clients. Control packets always have an outermost offset of 0xFFFFFFFFFFFF -- the highest offset allowed in 6 bytes, the next 6 bytes are the actual offset into some (perhaps unknown) keyfile. 
 * Make server use a directory of keys instead of a single keyfile. When a new packet comes in, if it is a control packet, the server tries to decrypt the packet from the starting offset of every key in it's keyfile directory. 
 * Make web interface for monitoring state information, modifying configuration, adding new keys, etc.
+* Make OTPTunnel pip installable. Make debian-style init script for launching otptunnel as daemon.
