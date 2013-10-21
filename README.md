@@ -33,22 +33,7 @@ The packets will be picked off the TAP at OSI layer 2 and have their 16-byte md5
 
 Please feel free to modify this source to your liking and submit a pull-request! I've tried to maintain good PEP8 formatting throughout the code and comment wherever possible so that anyone can understand it. One key motivation for me in doing this project is to bring cryptography back down to an easily digestable and highly customizable system for experimenters, students and hobbyists from
 
-#TODO: (as of 9/13/2013)
+#TODO: (as of 10/21/2013)
 
-##Immediate
-
-*  Fix server init code so that a remote ip doesn't have to be specified server-side but can be inferred from successfully reading a control packet.
-*  Give server `OTPTunnel` a `clients` object to track keyfiles and offsets for clients that it accepts.
-*  Make OTP object aware of the last decode offset used during every `OTP.decode()` call. This way, the recipient of a packet can reject it if it has a lower offset than the most recent one used.
-*  Introduce packet padding. At the beginning of every `OTP.encode()` call, the first byte at `OTP._current_encode_seek` is used as a random number 0-255 that will be the number of random bytes of padding prepended to the packet. The prepended bytes are taken from /dev/urandom so as to not waste keyfile. This is to defend against plaintext correlation based on every encrypted packet being predictably longer than it's plaintext counterpart.
-*  Introduce a "burning mode" which will write a pseudo-random byte (different bytes for each user) for every read into the keyfile. This way, even if the users attempt to use the same keyfile again, it wont work. Packets will we dropped because the client and server will have different bytes in their keyfiles where they've already used that portion of the key.
-* Introduce a configurable keybyte_zero counter that allows for a certain number of zeros to be allowed in a row from the keyfile. For instance, one might set the max_keybyte_zero counter at 3, and then no more than 3 zeroes would ever be pulled from the keyfile in immediate succession to help prevent leakage. During the `encode()` or `decode()` call, if the last 3 keybytes were zero, otptunnel will loop over the keyfile bytes (at regular stepping), until a non-zero byte is found and that will be the keybyte used in the XOR. 
-*  Design a config file. Make OTPTunnel read this file instead of having to specify a million flags.
-*  Offer users an ability to track and save session state in a state file.
-* Implement option to manually specify initial encoding seek offset value.
-* Introduce multiple clients per server.
-* Make server act as router, hand out IP addresses for VPN clients.
-* Introduce "control packets" as mechanism for servers and clients to exchange messages regarding establishing a new client connection to the server and for the server to hand out a TAP IP address to clients. Control packets always have an outermost offset of 0xFFFFFFFFFFFF -- the highest offset allowed in 6 bytes, the next 6 bytes are the actual offset into some (perhaps unknown) keyfile. 
-* Make server use a directory of keys instead of a single keyfile. When a new packet comes in, if it is a control packet, the server tries to decrypt the packet from the starting offset of every key in it's keyfile directory. 
 * Make web interface for monitoring state information, modifying configuration, adding new keys, etc.
 * Make OTPTunnel pip installable. Make debian-style init script for launching otptunnel as daemon.
