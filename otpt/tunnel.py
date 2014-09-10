@@ -1,4 +1,4 @@
-from .tunnel import Pad
+from .tunnel import Tunnel
 
 import socket
 import sys
