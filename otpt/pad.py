@@ -6,17 +6,14 @@ import hashlib
 
 
 class Pad(object):
-    def __init__(self, keyfile, initial_seek):
+    def __init__(self, keyfile, initial_seek=0):
         self._keypath = os.path.join(keyfile)
         self._current_encode_seek = initial_seek
         self._stepping = 2
         self._encode_counter = 0
         self._decode_counter = 0
-        try:
-            keypool = open(self._keypath, 'rb')
-        except:
-            sys.exit('Invalid keyfile specified')
-        keypool.close()
+        with open(self._keypath, 'rb') as keypool:
+            pass
 
     def fetch_encode_block(self, bufsize):
         """
