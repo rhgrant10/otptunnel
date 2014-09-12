@@ -9,9 +9,7 @@ across a network.
 
 #Installing
 
-`pip install pynetlinux`
-
-`git clone https://github.com/rpgraham84/otptunnel`
+`pip install OTPTunnel`
 
 #How To Use
 The idea is that two users would exchange a very large truly random
