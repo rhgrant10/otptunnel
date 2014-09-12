@@ -21,7 +21,7 @@ class Pad(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
-        print "Encoding Offset: ", self._current_encode_seek
+        # print "Encoding Offset: ", self._current_encode_seek
         keypool = open(self._keypath, 'rb')
         keyblock = bytearray()
         for i in range(bufsize):
@@ -37,7 +37,7 @@ class Pad(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
-        print "Decoding Offset: ", seek
+        # print "Decoding Offset: ", seek
         keypool = open(self._keypath, 'rb')
         keyblock = bytearray()
         for i in range(bufsize):
@@ -85,7 +85,7 @@ class Pad(object):
             packetbytes.append(offset[i])
 
         self._encode_counter += 1 
-        print "Encode Counter: ", self._encode_counter
+        # print "Encode Counter: ", self._encode_counter
         return packetbytes
 
     def decode(self, ciphertext):
@@ -96,15 +96,15 @@ class Pad(object):
         16 byte md5 checksum of packet. Pop off next 16 bytes and validate 
         rest of packet. Return plaintext packet if checksum is good.
         """
-        #print "ciphertext: ", ciphertext
+        ## print "ciphertext: ", ciphertext
         # 'Pop' last 6 bytes of ciphertext and interpret as integer offset.
         ciphertext = bytearray(ciphertext)
         offsetbytes = ciphertext[-6:]
         ciphertext = ciphertext[:-6]
-        #print "ciphertext -6: ", ciphertext
+        ## print "ciphertext -6: ", ciphertext
         counter = 6
         offset = 0
-        #print "offsetbytes: ", offsetbytes
+        ## print "offsetbytes: ", offsetbytes
         for i in offsetbytes:
             counter -= 1
             offset += i * (256 ** counter)
@@ -123,8 +123,8 @@ class Pad(object):
         chksum = bytearray(hashlib.md5(str(plaintext)).digest())
         if pktchksum == chksum:
             self._decode_counter += 1
-            print "Decoding counter: ", self._decode_counter
+            # print "Decoding counter: ", self._decode_counter
             return plaintext
         else:
-            print "Dropped packet: ", str(plaintext)
+            # print "Dropped packet: ", str(plaintext)
             return bytearray()

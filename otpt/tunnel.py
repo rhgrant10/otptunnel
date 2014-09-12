@@ -5,15 +5,17 @@ import sys
 import select
 import errno
 import pynetlinux
+import threading
 
 
-class Tunnel(object):
+class Tunnel(threading.Thread):
     '''
     OTPTunnel initializes a TAP interface and instanciates an OTP object which
     is used to encode and decode packets throughout the main_loop.
     '''
     def __init__(self, taddr, tmask, tmtu, laddr, lport, remote_address,
                  remote_port, keyfile, server):
+        super(Tunnel, self).__init__()
         self._tap = pynetlinux.tap.Tap()
         self._tap.set_ip(taddr)
         self._tap.set_netmask(int(tmask))
@@ -27,13 +29,15 @@ class Tunnel(object):
             self._key = Pad(keyfile, 0)
         else:
             self._key = Pad(keyfile, 1)
-            
+        self.running = False
+
     def run(self):
+        self.running = True
         mtu = self._tmtu
         files = [self._tap, self._sock]
         to_tap = None
         to_sock = None
-        while True:
+        while self.running:
             try:
                 r, w, x = select.select(files, files, [])
                 if self._tap in r:
@@ -72,3 +76,6 @@ class Tunnel(object):
                     continue
                 sys.stderr.write(str(e))
                 break
+    
+    def stop(self):
+        self.running = False
