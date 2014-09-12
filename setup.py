@@ -3,7 +3,7 @@ import sys
 
 setup(
     name="OTP Tunnel",
-    version="0.1.0dev",
+    version="0.1.0",
     author="Robert Graham",
     author_email="rpgraham84@gmail.com",
     packages=["otpt"],
