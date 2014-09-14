@@ -82,7 +82,7 @@ class Pad(object):
         rest of packet. Return plaintext packet if checksum is good.
         """
         # Interpret the offset bytes as the decoding seek.
-        ciphertext, offset = divide(bytearray(ciphertext), -6)
+        ciphertext, offset = _divide(bytearray(ciphertext), -6)
         seek = struct.unpack(">Q", bytearray('\x00\x00') + offset)[0]
         
         # Chop off the offset bytes
@@ -94,7 +94,7 @@ class Pad(object):
         # Remove and store last 16 bytes from plaintext and md5sum the
         # remaining bytes. If the checksum matches the 16 bytes that
         # were 'popped' off, return the plaintext.
-        plaintext, checksum = divide(plaintext, -16)
+        plaintext, checksum = _divide(plaintext, -16)
         realsum = bytearray(hashlib.md5(str(plaintext)).digest())
         if checksum == realsum:
             self._decode_counter += 1
@@ -102,5 +102,5 @@ class Pad(object):
         return bytearray()
         
 
-def divide(iter, i):
-    return iter[:i], iter[i:]
+def _divide(seq, i):
+    return seq[:i], seq[i:]
