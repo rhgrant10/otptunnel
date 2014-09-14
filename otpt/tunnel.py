@@ -17,10 +17,10 @@ class Tunnel(threading.Thread):
                  remote_port, keyfile, server):
         super(Tunnel, self).__init__()
         self._tap = pynetlinux.tap.Tap()
-        self._tap.set_ip(taddr)
-        self._tap.set_netmask(int(tmask))
-        self._tmtu = tmtu
+        self._tap.ip = taddr
+        self._tap.netmask = int(tmask)
         self._tap.up()
+        self._tmtu = tmtu
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.bind((laddr, lport))
         self._remote_address = remote_address
