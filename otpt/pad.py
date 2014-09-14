@@ -28,13 +28,12 @@ class Pad(object):
         through the bytes of the keyfile.
         """
         # print "Encoding Offset: ", self._current_encode_seek
-        keypool = open(self._keypath, 'rb')
-        keyblock = bytearray()
-        for i in range(bufsize):
-            keypool.seek(self._current_encode_seek)
-            keyblock.append(keypool.read(1))
-            self._current_encode_seek += self._stepping
-        keypool.close()
+        with open(self._keypath, 'rb') as keypool:
+            keyblock = bytearray()
+            for i in range(bufsize):
+                keypool.seek(self._current_encode_seek)
+                keyblock.append(keypool.read(1))
+                self._current_encode_seek += self._stepping
         return keyblock
 
     def fetch_decode_block(self, seek, bufsize):
@@ -44,13 +43,12 @@ class Pad(object):
         through the bytes of the keyfile.
         """
         # print "Decoding Offset: ", seek
-        keypool = open(self._keypath, 'rb')
-        keyblock = bytearray()
-        for i in range(bufsize):
-            keypool.seek(seek)
-            keyblock.append(keypool.read(1))
-            seek += self._stepping
-        keypool.close()
+        with open(self._keypath, 'rb') as keypool:
+            keyblock = bytearray()
+            for i in range(bufsize):
+                keypool.seek(seek)
+                keyblock.append(keypool.read(1))
+                seek += self._stepping
         return keyblock
 
     def encode(self, plaintext):
