@@ -1,7 +1,9 @@
 from operator import xor
+from itertools import starmap
 
 import os
 import sys
+import struct
 import hashlib
 
 
@@ -12,6 +14,7 @@ class Pad(object):
         self._stepping = 2
         self._encode_counter = 0
         self._decode_counter = 0
+        self._offset_length = 6
         with open(self._keypath, 'rb') as keypool:
             pass
 
@@ -55,34 +58,24 @@ class Pad(object):
 
         # We append the bytes that represent the hash of the packet to the end
         # of the packet
-        for i in hashish:
-            plaintext.append(i)
+        plaintext.extend(hashish)
 
-        # Initialize the ciphertext to be an empty bytearray to be appended to
-        # in our cipherloop. Make a note of the current seek in the file, it
-        # will be appended to the packet after the cipherloop.
-        ciphertext = bytearray()
-        offset = bytearray.fromhex(
-            "{0:012x}".format(self._current_encode_seek))
+        # Encode the pad seek as a 6 byte offset.
+        offset = bytearray.fromhex("{0:012x}".format(self._current_encode_seek))
 
         # Cipher loop. Iterate over the bytes in plaintext and xor with the
         # keybytes from the global offset.
         keypool = self.fetch_encode_block(len(plaintext))
-
-        for i in range(len(plaintext)):
-            ciphertext.append(xor(plaintext[i], keypool[i]))
+        ciphertext = bytearray(starmap(xor, zip(plaintext, keypool)))
 
         # After the original packet plus the md5 hashish are XOR'ed with the
         # keybytes, the offset within the keyfile is appended as a 6-byte hex
         # number to the packet bytes to be returned. This allows for a ~256TB
         # maximum keyfile size.
-        packetbytes = ciphertext
-        for i in range(len(offset)):
-            packetbytes.append(offset[i])
-
+        ciphertext.extend(offset)
+        
         self._encode_counter += 1 
-        # print "Encode Counter: ", self._encode_counter
-        return packetbytes
+        return ciphertext
 
     def decode(self, ciphertext):
         """
@@ -92,35 +85,27 @@ class Pad(object):
         16 byte md5 checksum of packet. Pop off next 16 bytes and validate 
         rest of packet. Return plaintext packet if checksum is good.
         """
-        ## print "ciphertext: ", ciphertext
-        # 'Pop' last 6 bytes of ciphertext and interpret as integer offset.
         ciphertext = bytearray(ciphertext)
-        offsetbytes = ciphertext[-6:]
-        ciphertext = ciphertext[:-6]
-        ## print "ciphertext -6: ", ciphertext
-        counter = 6
-        offset = 0
-        ## print "offsetbytes: ", offsetbytes
-        for i in offsetbytes:
-            counter -= 1
-            offset += i * (256 ** counter)
+        padding = bytearray('\x00') * (8 - self._offset_length)
+        
+        # Interpret the offset bytes as the decoding seek.
+        offset = ciphertext[-self._offset_length:]
+        seek = struct.unpack(">Q", padding + offset)[0]
+        
+        # Chop off the offset bytes
+        ciphertext = ciphertext[:-self._offset_length]
 
-        # Decipher loop.
-        keypool = self.fetch_decode_block(offset, len(ciphertext))
-        plaintext = bytearray()
-        for i in range(len(ciphertext)):
-            plaintext.append(xor(ciphertext[i], keypool[i]))
+        # Decipher.
+        keypool = self.fetch_decode_block(seek, len(ciphertext))
+        plaintext = bytearray(starmap(xor, zip(ciphertext, keypool)))
 
         # Remove and store last 16 bytes from plaintext and md5sum the
         # remaining bytes. If the checksum matches the 16 bytes that
         # were 'popped' off, return the plaintext.
-        pktchksum = plaintext[-16:]
+        checksum = plaintext[-16:]
         plaintext = plaintext[:-16]
-        chksum = bytearray(hashlib.md5(str(plaintext)).digest())
-        if pktchksum == chksum:
+        realsum = bytearray(hashlib.md5(str(plaintext)).digest())
+        if checksum == realsum:
             self._decode_counter += 1
-            # print "Decoding counter: ", self._decode_counter
             return plaintext
-        else:
-            # print "Dropped packet: ", str(plaintext)
-            return bytearray()
+        return bytearray()
