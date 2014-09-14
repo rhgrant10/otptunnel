@@ -28,6 +28,7 @@ class Pad(object):
         through the bytes of the keyfile.
         """
         # print "Encoding Offset: ", self._current_encode_seek
+        # TODO: Can this be done without reading byte-by-byte?
         with open(self._keypath, 'rb') as keypool:
             keyblock = bytearray()
             for i in range(bufsize):
@@ -43,6 +44,7 @@ class Pad(object):
         through the bytes of the keyfile.
         """
         # print "Decoding Offset: ", seek
+        # TODO: Can this be done without reading byte-by-byte?
         with open(self._keypath, 'rb') as keypool:
             keyblock = bytearray()
             for i in range(bufsize):
