@@ -56,13 +56,13 @@ class Codec(threading.Thread):
         self._running = False
 
 
-class Server(Tunnel):
+class Server(Codec):
     def __init__(self, tap, pad, laddr, raddr, mtu):
         super(Server, self).__init__(self, tap, pad, laddr, raddr, mtu)
         self._pad.set_seek = 0
         
 
-class Client(Tunnel):
+class Client(Codec):
     def __init__(self, tap, pad, laddr, raddr, mtu):
         super(Client, self).__init__(self, tap, pad, laddr, raddr, mtu)
         self._pad.set_seek = 1
