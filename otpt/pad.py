@@ -14,7 +14,6 @@ class Pad(object):
         self._stepping = 2
         self._encode_counter = 0
         self._decode_counter = 0
-        self._offset_length = 6
         with open(self._keypath, 'rb') as keypool:
             pass
 
