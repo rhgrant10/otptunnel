@@ -65,21 +65,20 @@ class Pad(object):
         ciphertext, offset = _divide(bytearray(ciphertext), -6)
         seek = struct.unpack(">Q", bytearray('\x00\x00') + offset)[0]
         
-        # Chop off the offset bytes
-
-        # Decipher.
+        # Decode the ciphertext.
         keypool = self.fetch_decode_block(seek, len(ciphertext))
         plaintext = bytearray(starmap(xor, zip(ciphertext, keypool)))
 
-        # Remove and store last 16 bytes from plaintext and md5sum the
-        # remaining bytes. If the checksum matches the 16 bytes that
-        # were 'popped' off, return the plaintext.
+        # Interpret the last 16 bytes as the checksum.
         plaintext, checksum = _divide(plaintext, -16)
+        
+        # Ensure real sum matches checksum.
         realsum = bytearray(hashlib.md5(str(plaintext)).digest())
-        if checksum == realsum:
-            self._decode_counter += 1
-            return plaintext
-        return bytearray()
+        if checksum != realsum:
+            return bytearray()
+        
+        self._decode_counter += 1
+        return plaintext
         
 
 def _divide(seq, i):
