@@ -54,7 +54,7 @@ class Pad(object):
         """
         plaintext = bytearray(plaintext)
 
-        # Append the md5sum of the plaintext to it.
+        # Extend the plaintext by its md5sum.
         hashish = bytearray(hashlib.md5(str(plaintext)).digest())
         plaintext.extend(hashish)
 
@@ -65,8 +65,8 @@ class Pad(object):
         keypool = self.fetch_encode_block(len(plaintext))
         ciphertext = bytearray(starmap(xor, zip(plaintext, keypool)))
 
-        # Append the seek used to do the encoding as a 6 bytes of hex. This
-        # allows for a ~256TB maximum keyfile size.
+        # Append the seek used to do the encoding as 6 bytes of hex. This allows
+        # for a ~256TB maximum keyfile size.
         offset = bytearray.fromhex("{0:012x}".format(seek))
         ciphertext.extend(offset)
         
