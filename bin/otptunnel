@@ -3,7 +3,6 @@ import otpt
 
 import argparse
 import textwrap
-import socket
 import sys
 
 
