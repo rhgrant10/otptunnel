@@ -15,6 +15,12 @@ class Pad(object):
         with open(self._keypath, 'rb') as keypool:
             pass
 
+    def set_seek(self, seek):
+        """
+        Sets the current position for encoding.
+        """
+        self._current_encode_seek = seek
+
     def fetch_encode_block(self, bufsize):
         """
         Takes the size of the encoding block to be returned
