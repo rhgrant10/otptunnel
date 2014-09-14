@@ -27,15 +27,11 @@ class Pad(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
-        # print "Encoding Offset: ", self._current_encode_seek
-        # TODO: Can this be done without reading byte-by-byte?
         with open(self._keypath, 'rb') as keypool:
-            keyblock = bytearray()
-            for i in range(bufsize):
-                keypool.seek(self._current_encode_seek)
-                keyblock.append(keypool.read(1))
-                self._current_encode_seek += self._stepping
-        return keyblock
+            keypool.seek(self._current_encode_seek)
+            keyblock = bytearray(keypool.read(bufsize))
+            self._current_encode_seek += self._stepping * len(keyblock)
+            return keyblock
 
     def fetch_decode_block(self, seek, bufsize):
         """
@@ -43,15 +39,9 @@ class Pad(object):
         and fetches a block of key using self's stepping value to step 
         through the bytes of the keyfile.
         """
-        # print "Decoding Offset: ", seek
-        # TODO: Can this be done without reading byte-by-byte?
         with open(self._keypath, 'rb') as keypool:
-            keyblock = bytearray()
-            for i in range(bufsize):
-                keypool.seek(seek)
-                keyblock.append(keypool.read(1))
-                seek += self._stepping
-        return keyblock
+            keypool.seek(seek)
+            return bytearray(keypool.read(bufsize))
 
     def encode(self, plaintext):
         """
