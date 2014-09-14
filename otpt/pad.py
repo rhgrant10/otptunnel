@@ -53,25 +53,21 @@ class Pad(object):
         with bytes pulled from keyfile.
         """
         plaintext = bytearray(plaintext)
-        # Here we take a hash of the bytestring that was the original packet.
-        hashish = bytearray(hashlib.md5(str(plaintext)).digest())
 
-        # We append the bytes that represent the hash of the packet to the end
-        # of the packet
+        # Append the md5sum of the plaintext to it.
+        hashish = bytearray(hashlib.md5(str(plaintext)).digest())
         plaintext.extend(hashish)
 
-        # Encode the pad seek as a 6 byte offset.
-        offset = bytearray.fromhex("{0:012x}".format(self._current_encode_seek))
+        # Note the seek before encoding the plaintext.
+        seek = self._current_encode_seek
 
-        # Cipher loop. Iterate over the bytes in plaintext and xor with the
-        # keybytes from the global offset.
+        # Get the keypool and encode the plaintext with it.
         keypool = self.fetch_encode_block(len(plaintext))
         ciphertext = bytearray(starmap(xor, zip(plaintext, keypool)))
 
-        # After the original packet plus the md5 hashish are XOR'ed with the
-        # keybytes, the offset within the keyfile is appended as a 6-byte hex
-        # number to the packet bytes to be returned. This allows for a ~256TB
-        # maximum keyfile size.
+        # Append the seek used to do the encoding as a 6 bytes of hex. This
+        # allows for a ~256TB maximum keyfile size.
+        offset = bytearray.fromhex("{0:012x}".format(seek))
         ciphertext.extend(offset)
         
         self._encode_counter += 1 
@@ -85,15 +81,11 @@ class Pad(object):
         16 byte md5 checksum of packet. Pop off next 16 bytes and validate 
         rest of packet. Return plaintext packet if checksum is good.
         """
-        ciphertext = bytearray(ciphertext)
-        padding = bytearray('\x00') * (8 - self._offset_length)
-        
         # Interpret the offset bytes as the decoding seek.
-        offset = ciphertext[-self._offset_length:]
-        seek = struct.unpack(">Q", padding + offset)[0]
+        ciphertext, offset = divide(bytearray(ciphertext), -6)
+        seek = struct.unpack(">Q", bytearray('\x00\x00') + offset)[0]
         
         # Chop off the offset bytes
-        ciphertext = ciphertext[:-self._offset_length]
 
         # Decipher.
         keypool = self.fetch_decode_block(seek, len(ciphertext))
@@ -102,10 +94,13 @@ class Pad(object):
         # Remove and store last 16 bytes from plaintext and md5sum the
         # remaining bytes. If the checksum matches the 16 bytes that
         # were 'popped' off, return the plaintext.
-        checksum = plaintext[-16:]
-        plaintext = plaintext[:-16]
+        plaintext, checksum = divide(plaintext, -16)
         realsum = bytearray(hashlib.md5(str(plaintext)).digest())
         if checksum == realsum:
             self._decode_counter += 1
             return plaintext
         return bytearray()
+        
+
+def divide(iter, i):
+    return iter[:i], iter[i:]
