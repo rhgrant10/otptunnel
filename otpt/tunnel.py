@@ -14,7 +14,7 @@ class Tunnel(threading.Thread):
     is used to encode and decode packets throughout the main_loop.
     '''
     def __init__(self, taddr, tmask, tmtu, laddr, lport, remote_address,
-                 remote_port, keyfile, server):
+                 remote_port, keyfile, keyoffset):
         super(Tunnel, self).__init__()
         self._tap = pynetlinux.tap.Tap()
         self._tap.ip = taddr
@@ -25,11 +25,16 @@ class Tunnel(threading.Thread):
         self._sock.bind((laddr, lport))
         self._remote_address = remote_address
         self._remote_port = remote_port
-        if server == False:
-            self._key = Pad(keyfile, 0)
-        else:
-            self._key = Pad(keyfile, 1)
+        self._key = Pad(keyfile, keyoffset)
         self.running = False
+
+    @classmethod
+    def Server(cls, taddr, tmask, tmtu, laddr, lport, raddr, rport, kfile):
+        return cls(taddr, tmask, tmtu, laddr, lport, raddr, rport, kfile, 0)
+        
+    @classmethod
+    def Client(cls, tarrd, tmask, tmtu, laddr, lport, raddr, rport, kfile):
+        return cls(taddr, tmask, tmtu, laddr, lport, raddr, rport, kfile, 1)
 
     def run(self):
         self.running = True
