@@ -8,6 +8,7 @@ import hashlib
 
 
 class Pad(object):
+    """A one-time pad for encrypting and decrypting messages."""
     def __init__(self, keyfile, initial_seek=0):
         self._keypath = os.path.join(keyfile)
         self._current_encode_seek = initial_seek
@@ -18,17 +19,11 @@ class Pad(object):
             pass
 
     def set_seek(self, seek):
-        """
-        Sets the current position for encoding.
-        """
+        """Sets the current position for encoding."""
         self._current_encode_seek = seek
 
     def fetch_encode_block(self, bufsize):
-        """
-        Takes the size of the encoding block to be returned
-        and fetches a block of key using self's stepping value to step 
-        through the bytes of the keyfile.
-        """
+        """Returns the next bufsize bytes of the pad."""
         with open(self._keypath, 'rb') as keypool:
             keypool.seek(self._current_encode_seek)
             keyblock = bytearray(keypool.read(bufsize))
@@ -36,21 +31,13 @@ class Pad(object):
             return keyblock
 
     def fetch_decode_block(self, seek, bufsize):
-        """
-        Takes the size of the encoding block to be returned
-        and fetches a block of key using self's stepping value to step 
-        through the bytes of the keyfile.
-        """
+        """Returns bufsize bytes of the pad starting at seek."""
         with open(self._keypath, 'rb') as keypool:
             keypool.seek(seek)
             return bytearray(keypool.read(bufsize))
 
     def encode(self, plaintext):
-        """
-        Takes plaintext as bytearray. Generates a 16 byte md5 hash of the 
-        entire packet and appends it to the plaintext. Plaintext is xor'ed
-        with bytes pulled from keyfile.
-        """
+        """Return an encrypted copy of plaintext."""
         plaintext = bytearray(plaintext)
 
         # Extend the plaintext by its md5sum.
@@ -73,13 +60,7 @@ class Pad(object):
         return ciphertext
 
     def decode(self, ciphertext):
-        """
-        Takes ciphertext as bytearray. Pops last 6 bytes off the packet.
-        Interprets that as an integer (from hex bytes) and uses that
-        as the starting offset. Step by 2 to decode rest of payload including
-        16 byte md5 checksum of packet. Pop off next 16 bytes and validate 
-        rest of packet. Return plaintext packet if checksum is good.
-        """
+        """Return a decrypted copy of ciphertext."""
         # Interpret the offset bytes as the decoding seek.
         ciphertext, offset = _divide(bytearray(ciphertext), -6)
         seek = struct.unpack(">Q", bytearray('\x00\x00') + offset)[0]
