@@ -11,6 +11,7 @@ class Pad(object):
     """A one-time pad for encrypting and decrypting messages."""
     def __init__(self, keyfile, initial_seek=0):
         self._keypath = os.path.join(keyfile)
+        self._iseek = initial_seek
         self._current_encode_seek = initial_seek
         self._stepping = 2
         self._encode_counter = 0
@@ -26,15 +27,16 @@ class Pad(object):
         """Returns the next bufsize bytes of the pad."""
         with open(self._keypath, 'rb') as keypool:
             keypool.seek(self._current_encode_seek)
-            keyblock = bytearray(keypool.read(bufsize))
+            keyblock = bytearray(keypool.read(self._stepping * bufsize))
             self._current_encode_seek += self._stepping * len(keyblock)
-            return keyblock
+            return keyblock[self._iseek::self._stepping]
 
     def fetch_decode_block(self, seek, bufsize):
         """Returns bufsize bytes of the pad starting at seek."""
         with open(self._keypath, 'rb') as keypool:
             keypool.seek(seek)
-            return bytearray(keypool.read(bufsize))
+            keyblock = bytearray(keypool.read(self._stepping * bufsize))
+            return keyblock[self._iseek::self._stepping]
 
     def encode(self, plaintext):
         """Return an encrypted copy of plaintext."""
