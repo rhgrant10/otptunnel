@@ -10,7 +10,7 @@ import hashlib
 class Pad(object):
     """A one-time pad for encrypting and decrypting messages."""
     def __init__(self, keyfile, seek=0, step=2):
-        self._keypath = os.path.join(keyfile)
+        self._keypath = os.path.abspath(keyfile)
         self._iseek = seek
         self._current_encode_seek = seek
         self._stepping = step
