@@ -9,11 +9,11 @@ import hashlib
 
 class Pad(object):
     """A one-time pad for encrypting and decrypting messages."""
-    def __init__(self, keyfile, initial_seek=0):
+    def __init__(self, keyfile, seek=0, step=2):
         self._keypath = os.path.join(keyfile)
-        self._iseek = initial_seek
-        self._current_encode_seek = initial_seek
-        self._stepping = 2
+        self._iseek = seek
+        self._current_encode_seek = seek
+        self._stepping = step
         self._encode_counter = 0
         self._decode_counter = 0
         with open(self._keypath, 'rb') as keypool:
