@@ -13,7 +13,7 @@ class Pad(object):
         self._keypath = os.path.abspath(keyfile)
         self._iseek = seek
         self._current_encode_seek = seek
-        self._stepping = step
+        self._step = step
         self._encode_counter = 0
         self._decode_counter = 0
         with open(self._keypath, 'rb') as keypool:
@@ -23,20 +23,20 @@ class Pad(object):
         """Sets the current position for encoding."""
         self._current_encode_seek = seek
 
-    def fetch_encode_block(self, bufsize):
+    def _fetch_encode_block(self, bufsize):
         """Returns the next bufsize bytes of the pad."""
         with open(self._keypath, 'rb') as keypool:
             keypool.seek(self._current_encode_seek)
-            keyblock = bytearray(keypool.read(self._stepping * bufsize))
-            self._current_encode_seek += self._stepping * len(keyblock)
-            return keyblock[self._iseek::self._stepping]
+            keyblock = bytearray(keypool.read(self._step * bufsize))
+            self._current_encode_seek += self._step * len(keyblock)
+            return keyblock[self._iseek::self._step]
 
-    def fetch_decode_block(self, seek, bufsize):
+    def _fetch_decode_block(self, seek, bufsize):
         """Returns bufsize bytes of the pad starting at seek."""
         with open(self._keypath, 'rb') as keypool:
             keypool.seek(seek)
-            keyblock = bytearray(keypool.read(self._stepping * bufsize))
-            return keyblock[self._iseek::self._stepping]
+            keyblock = bytearray(keypool.read(self._step * bufsize))
+            return keyblock[self._iseek::self._step]
 
     def encode(self, plaintext):
         """Return an encrypted copy of plaintext."""
@@ -50,7 +50,7 @@ class Pad(object):
         seek = self._current_encode_seek
 
         # Get the keypool and encode the plaintext with it.
-        keypool = self.fetch_encode_block(len(plaintext))
+        keypool = self._fetch_encode_block(len(plaintext))
         ciphertext = bytearray(starmap(xor, zip(plaintext, keypool)))
 
         # Append the seek used to do the encoding as 6 bytes of hex. This allows
@@ -68,7 +68,7 @@ class Pad(object):
         seek = struct.unpack(">Q", bytearray('\x00\x00') + offset)[0]
         
         # Decode the ciphertext.
-        keypool = self.fetch_decode_block(seek, len(ciphertext))
+        keypool = self._fetch_decode_block(seek, len(ciphertext))
         plaintext = bytearray(starmap(xor, zip(ciphertext, keypool)))
 
         # Interpret the last 16 bytes as the checksum.
