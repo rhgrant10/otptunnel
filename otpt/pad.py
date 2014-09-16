@@ -1,13 +1,17 @@
 from operator import xor
+from itertools import starmap
 
 import os
 import sys
+import struct
 import hashlib
 
 
 class Pad(object):
+    """A one-time pad for encrypting and decrypting messages."""
     def __init__(self, keyfile, initial_seek=0):
         self._keypath = os.path.join(keyfile)
+        self._iseek = initial_seek
         self._current_encode_seek = initial_seek
         self._stepping = 2
         self._encode_counter = 0
@@ -15,116 +19,69 @@ class Pad(object):
         with open(self._keypath, 'rb') as keypool:
             pass
 
+    def set_seek(self, seek):
+        """Sets the current position for encoding."""
+        self._current_encode_seek = seek
+
     def fetch_encode_block(self, bufsize):
-        """
-        Takes the size of the encoding block to be returned
-        and fetches a block of key using self's stepping value to step 
-        through the bytes of the keyfile.
-        """
-        # print "Encoding Offset: ", self._current_encode_seek
-        keypool = open(self._keypath, 'rb')
-        keyblock = bytearray()
-        for i in range(bufsize):
+        """Returns the next bufsize bytes of the pad."""
+        with open(self._keypath, 'rb') as keypool:
             keypool.seek(self._current_encode_seek)
-            keyblock.append(keypool.read(1))
-            self._current_encode_seek += self._stepping
-        keypool.close()
-        return keyblock
+            keyblock = bytearray(keypool.read(self._stepping * bufsize))
+            self._current_encode_seek += self._stepping * len(keyblock)
+            return keyblock[self._iseek::self._stepping]
 
     def fetch_decode_block(self, seek, bufsize):
-        """
-        Takes the size of the encoding block to be returned
-        and fetches a block of key using self's stepping value to step 
-        through the bytes of the keyfile.
-        """
-        # print "Decoding Offset: ", seek
-        keypool = open(self._keypath, 'rb')
-        keyblock = bytearray()
-        for i in range(bufsize):
+        """Returns bufsize bytes of the pad starting at seek."""
+        with open(self._keypath, 'rb') as keypool:
             keypool.seek(seek)
-            keyblock.append(keypool.read(1))
-            seek += self._stepping
-        keypool.close()
-        return keyblock
+            keyblock = bytearray(keypool.read(self._stepping * bufsize))
+            return keyblock[self._iseek::self._stepping]
 
     def encode(self, plaintext):
-        """
-        Takes plaintext as bytearray. Generates a 16 byte md5 hash of the 
-        entire packet and appends it to the plaintext. Plaintext is xor'ed
-        with bytes pulled from keyfile.
-        """
+        """Return an encrypted copy of plaintext."""
         plaintext = bytearray(plaintext)
-        # Here we take a hash of the bytestring that was the original packet.
+
+        # Extend the plaintext by its md5sum.
         hashish = bytearray(hashlib.md5(str(plaintext)).digest())
+        plaintext.extend(hashish)
 
-        # We append the bytes that represent the hash of the packet to the end
-        # of the packet
-        for i in hashish:
-            plaintext.append(i)
+        # Note the seek before encoding the plaintext.
+        seek = self._current_encode_seek
 
-        # Initialize the ciphertext to be an empty bytearray to be appended to
-        # in our cipherloop. Make a note of the current seek in the file, it
-        # will be appended to the packet after the cipherloop.
-        ciphertext = bytearray()
-        offset = bytearray.fromhex(
-            "{0:012x}".format(self._current_encode_seek))
-
-        # Cipher loop. Iterate over the bytes in plaintext and xor with the
-        # keybytes from the global offset.
+        # Get the keypool and encode the plaintext with it.
         keypool = self.fetch_encode_block(len(plaintext))
+        ciphertext = bytearray(starmap(xor, zip(plaintext, keypool)))
 
-        for i in range(len(plaintext)):
-            ciphertext.append(xor(plaintext[i], keypool[i]))
-
-        # After the original packet plus the md5 hashish are XOR'ed with the
-        # keybytes, the offset within the keyfile is appended as a 6-byte hex
-        # number to the packet bytes to be returned. This allows for a ~256TB
-        # maximum keyfile size.
-        packetbytes = ciphertext
-        for i in range(len(offset)):
-            packetbytes.append(offset[i])
-
+        # Append the seek used to do the encoding as 6 bytes of hex. This allows
+        # for a ~256TB maximum keyfile size.
+        offset = bytearray.fromhex("{0:012x}".format(seek))
+        ciphertext.extend(offset)
+        
         self._encode_counter += 1 
-        # print "Encode Counter: ", self._encode_counter
-        return packetbytes
+        return ciphertext
 
     def decode(self, ciphertext):
-        """
-        Takes ciphertext as bytearray. Pops last 6 bytes off the packet.
-        Interprets that as an integer (from hex bytes) and uses that
-        as the starting offset. Step by 2 to decode rest of payload including
-        16 byte md5 checksum of packet. Pop off next 16 bytes and validate 
-        rest of packet. Return plaintext packet if checksum is good.
-        """
-        ## print "ciphertext: ", ciphertext
-        # 'Pop' last 6 bytes of ciphertext and interpret as integer offset.
-        ciphertext = bytearray(ciphertext)
-        offsetbytes = ciphertext[-6:]
-        ciphertext = ciphertext[:-6]
-        ## print "ciphertext -6: ", ciphertext
-        counter = 6
-        offset = 0
-        ## print "offsetbytes: ", offsetbytes
-        for i in offsetbytes:
-            counter -= 1
-            offset += i * (256 ** counter)
+        """Return a decrypted copy of ciphertext."""
+        # Interpret the offset bytes as the decoding seek.
+        ciphertext, offset = _divide(bytearray(ciphertext), -6)
+        seek = struct.unpack(">Q", bytearray('\x00\x00') + offset)[0]
+        
+        # Decode the ciphertext.
+        keypool = self.fetch_decode_block(seek, len(ciphertext))
+        plaintext = bytearray(starmap(xor, zip(ciphertext, keypool)))
 
-        # Decipher loop.
-        keypool = self.fetch_decode_block(offset, len(ciphertext))
-        plaintext = bytearray()
-        for i in range(len(ciphertext)):
-            plaintext.append(xor(ciphertext[i], keypool[i]))
-
-        # Remove and store last 16 bytes from plaintext and md5sum the
-        # remaining bytes. If the checksum matches the 16 bytes that
-        # were 'popped' off, return the plaintext.
-        pktchksum = plaintext[-16:]
-        plaintext = plaintext[:-16]
-        chksum = bytearray(hashlib.md5(str(plaintext)).digest())
-        if pktchksum == chksum:
-            self._decode_counter += 1
-            # print "Decoding counter: ", self._decode_counter
-            return plaintext
-        else:
-            # print "Dropped packet: ", str(plaintext)
+        # Interpret the last 16 bytes as the checksum.
+        plaintext, checksum = _divide(plaintext, -16)
+        
+        # Ensure real sum matches checksum.
+        realsum = bytearray(hashlib.md5(str(plaintext)).digest())
+        if checksum != realsum:
             return bytearray()
+        
+        self._decode_counter += 1
+        return plaintext
+        
+
+def _divide(seq, i):
+    return seq[:i], seq[i:]

@@ -3,81 +3,87 @@ import otpt
 
 import argparse
 import textwrap
-import socket
 import sys
 
 
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.dedent('''\
-        A VPN-like server/client that utilizes a user specified
-        one time pad for the XOR'ing of network traffic over a TAP interface.
-        '''),
-        epilog=textwrap.dedent('''\
+        description=textwrap.dedent('''
+            A VPN-like server/client that utilizes a user specified
+            one time pad for the XOR'ing of network traffic over a TAP
+            interface.
+            '''),
+        epilog=textwrap.dedent('''
         
-        Examples:
-        
-        To start a server listening on default settings,
+            Examples:
+            
+            To start a server listening on default settings,
 
-        otptunnel -S -K ~/random.bin  
-        
-        If that server's IP is 192.168.1.1, and you have the same keyfile
-        in your home directory, you can connect to it using,  
+            otptunnel -s -k ~/random.bin  
+            
+            If that server's IP is 192.168.1.1, and you have the same keyfile
+            in your home directory, you can connect to it using,  
 
-        otptunnel -K ~/random.bin -A 192.168.1.1 --tap-addr 10.8.0.2
-
-        '''))
-    parser.add_argument('-S', '--server', action="store_true", dest='server',
-                        help="set server mode (default: client mode)")
-    parser.add_argument('-K', dest='keyfile', help='file to be used as key')
-    parser.add_argument('-A', dest='remote_address',
-                        help='set remote server address')
-    parser.add_argument('-P', type=int, dest='remote_port', default='12000',
-                        help='set remote server port')
-    parser.add_argument(
-        '--tap-addr', type=str, dest='taddr', default='10.8.0.1',
-        help='set tunnel local address (default: 10.8.0.1)')
-    parser.add_argument('--tap-netmask', default='24', dest='tmask',
-                        help='set tunnel netmask (default: 24)')
-    parser.add_argument('--tap-mtu', type=int, default=32768, dest='tmtu',
-                        help='set tunnel MTU (default: 32768)')
-    parser.add_argument('--local-addr', default='0.0.0.0', dest='laddr',
-        help='address to which OTPTunnel will bind (default: 0.0.0.0)')
-    parser.add_argument('--local-port', type=int, default=12000, dest='lport',
-                        help='set local port (default: 12000)')
+            otptunnel -k ~/random.bin --tap-addr 10.8.0.2/24 --remote-addr 192.168.1.1:12000
+            '''))
+    parser.add_argument('-s', '--server',
+        action="store_true",
+        dest='server',
+        help="set server mode (default: client mode)"
+        )
+    parser.add_argument('-k',
+        dest='keyfile',
+        help='file to be used as key',
+        required=True
+        )
+    parser.add_argument('-T', '--tap-addr',
+        dest='taddr',
+        default='10.8.0.1/24',
+        help='set tunnel IP and mask (default: 10.8.0.1/24)'
+        )
+    parser.add_argument('-L', '--local-addr',
+        dest='laddr',
+        default='0.0.0.0:12000',
+        help='address to which OTPTunnel will bind (default: 0.0.0.0:12000)'
+        )
+    parser.add_argument('-R', '--remote-addr',
+        dest='raddr',
+        help='set remote server IP and port'
+        )
+    parser.add_argument('-m', '--tap-mtu',
+        type=int,
+        dest='tmtu',
+        default=32768,
+        help='set tunnel MTU (default: 32768)'
+        )
     args = parser.parse_args()
-    # User must always specify keyfile.
-    if not args.keyfile:
-        parser.print_help()
-        print "[ERROR] No keyfile specified."
-        return 1
+    
+    # Create the tap
+    tap = pynetlinux.tap.Tap()
+    try:
+        tap.ip, tap.mask = args.taddr.rsplit('/', 1)
+    except ValueError:
+        tap.ip, tap.mask = args.taddr, '24'
+    tap.up()
+    
+    # Create the pad
+    pad = otpt.Pad(args.keyfile)
+    
+    # Create the codec
     if not args.server:
-        # User must specify TAP address when acting as a client.
-        # The server will be 10.8.0.1 by default so the client can't
-        # use the default.
-        if not args.remote_address:
-            parser.print_help()
-            return 1
-        try:
-            client = otpt.Tunnel(
-                args.taddr, args.tmask, args.tmtu, args.laddr,
-                args.lport, args.remote_address, args.remote_port,
-                args.keyfile, args.server)
-        except (socket.error) as e:
-            print >> sys.stderr, str(e)
-            return 1
-        client.run()
-        return 0
+        codec = otpt.Client(tap, pad, args.laddr, args.raddr, args.tmtu)
     else:
-        # We are in server mode.
-        server = otpt.Tunnel(
-            args.taddr, args.tmask, args.tmtu, args.laddr,
-            args.lport, args.remote_address, args.remote_port,
-            args.keyfile, args.server)
-        server.run()
-        return 0
+        codec = otpt.Server(tap, pad, args.laddr, args.raddr, args.tmtu)
+    
+    # Run the codec
+    codec.run()
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        main()
+    except Exception as e:
+        sys.stderr.write('{}\n'.format(str(e)))
+        sys.exit(1)
+    sys.exit(0)
